@@ -11,20 +11,22 @@ function Game(props) {
   /** history-list for "time travel" */
   const [history, setHistory] = useState([{
     /**
-     * an one-dimensional list, 
-     * record the information of board for a certain timing.
-     * null for the square without any kind of piece on it
+     * @squareList a one-dimensional list, 
+     *    record the pieces on board for a certain timing,
+     *    null for the square without piece on it.
+     * @newPieceIndex the index of newest piece placed.
      */
-    squares: Array(props.boardSize ** 2).fill(null),
+    squareList: Array(props.boardSize ** 2).fill(null),
+    lastPieceLocation: null,
   }]);
 
-  /** current step, also used for the index of history-list */
-  const [step, setStep] = useState(0);
+  /** current move, also used as the index of history-list */
+  const [move, setMove] = useState(0);
 
   /** whose turn */
   const [blackIsNext, setBlackIsNext] = useState(true);
 
-  /** winner. null for nobody wins */
+  /** who wins. null for nobody */
   const [winner, setWinner] = useState(null);
 
   // ===========================================================================
@@ -33,52 +35,57 @@ function Game(props) {
 
   /**
    * process after the square-button pressed
-   * @i No. of the square pressed, 
+   * @i index of the square pressed, 
    *    which means the location of new piece
    */
   const handleClick = i => {
-    /** after going back to the past, throw away all the “new future” */
-    const curHistory = history.slice(0, step + 1);
+    /** 
+     * after going back to the past, and place a piece
+     * the "history"(future) should be changed
+     */
+    const curHistory = history.slice(0, move + 1);
 
     /** get the new squares at current timing */
-    const squares = curHistory[step].squares.slice();
+    const curSquareList = curHistory[move].squareList.slice();
 
     /** if winner occurs, game should be over */
-    if (winner || squares[i]) return;
+    if (winner || curSquareList[i]) return;
 
-    /** place a new piece */
-    squares[i] = blackIsNext ? '●' : '○';
-    setHistory(curHistory.concat([{
-      squares: squares,
-    }]));
+    /** place a new piece, update squares-list */
+    curSquareList[i] = blackIsNext ? '●' : '○';
+
+    /** current timing */
+    const curTiming = {
+      squareList: curSquareList,
+      lastPieceLocation: i,
+    }
 
     /** change status */
-    setStep(curHistory.length);
-    setWinner(calculateWinner(squares, i));
+    setHistory(curHistory.concat([curTiming]));
+    setMove(curHistory.length);
+    setWinner(calculateWinner(curTiming));
     setBlackIsNext(!blackIsNext);
   }
 
   /** process time travel */
-  const jumpTo = targetStep => {
-    console.log(`jump from #${step} to #${targetStep}`);
-    setStep(targetStep);
-    setBlackIsNext((targetStep % 2) === 0);
-
-    /** after going back to the past, reset the winner */
-    if (targetStep < step) setWinner(null);
+  const jumpTo = targetMove => {
+    console.log(`jump from #${move} to #${targetMove}`);
+    setMove(targetMove);
+    setBlackIsNext((targetMove % 2) === 0);
+    setWinner(calculateWinner(history[targetMove]));
   }
 
   /**
    * judge the winner
-   * @index the index of new-piece in squares list
+   * @timing an element of history-list
    */
-  function calculateWinner(squares, index) {
+  function calculateWinner(timing) {
     /** from index to coordinate */
-    const [x0, y0] = index2xy(index);
+    const [x0, y0] = index2xy(timing.lastPieceLocation);
 
     /** which kind the new-piece is */
-    const piece = squares[index];
-    console.log(`#${step + 1} : ${piece} @(${x0}, ${y0})`);
+    const piece = timing.squareList[timing.lastPieceLocation];
+    console.log(`#${move + 1} : ${piece} @(${x0}, ${y0})`);
 
     /** the length of longest chain include new-piece */
     let maxLength = 1;
@@ -94,7 +101,7 @@ function Game(props) {
 
       /** through one side of this direction */
       while (x >= 1 && x <= props.boardSize && y >= 1 && y <= props.boardSize) {
-        if (squares[xy2index(x, y)] === piece) {
+        if (timing.squareList[xy2index(x, y)] === piece) {
           x += direct[0];
           y += direct[1];
           length++;
@@ -107,7 +114,7 @@ function Game(props) {
 
       /** through another side of this direction */
       while (x >= 1 && x <= props.boardSize && y >= 1 && y <= props.boardSize) {
-        if (squares[xy2index(x, y)] === piece) {
+        if (timing.squareList[xy2index(x, y)] === piece) {
           x -= direct[0];
           y -= direct[1];
           length++;
@@ -116,7 +123,7 @@ function Game(props) {
       maxLength = (length > maxLength) ? length : maxLength;
     });
 
-    /** player wins? */
+    /** Did current player win? */
     return maxLength >= props.winTarget ? piece : null;
   }
 
@@ -138,7 +145,7 @@ function Game(props) {
       <div className="game-board">
         <Board
           boardSize={props.boardSize}
-          squares={history[step].squares}
+          squares={history[move].squareList}
           onClick={i => handleClick(i)}
         />
       </div>
